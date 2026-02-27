@@ -9,6 +9,12 @@
 
 ## 📚 ドキュメント構成
 
+### 🔄 [ワークフロー設計思想](Workflow-Design)
+- **Supabase駆動BPMNアーキテクチャ** - 専用ツール不要のワークフロー管理
+- **データモデル** - workflow_processes / steps / state テーブル設計
+- **AIセッション引き継ぎプロトコル** - セッションをまたいだ状態管理
+- **Camundaとの機能対応表** - BPMN概念との対応
+
 ### 🏗️ [システムアーキテクチャ](System-Architecture)
 - **全体システム設計** - Issue → Supabase → Copilot パイプライン
 - **コンポーネント詳細説明** - GitHub Actions、n8n、Supabase、VS Code Extension
