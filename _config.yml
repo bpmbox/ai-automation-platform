@@ -1,0 +1,47 @@
+# GitHub Pages Jekyll Configuration
+url: "https://bpmbox.github.io"
+baseurl: "/ai-automation-platform"
+
+# Site Details
+title: "AI自動化プラットフォーム"
+email: "contact@bpmbox.com"
+description: "GitHub Issue → Supabase Realtime → VS Code Copilot 統合システム"
+author: "bpmbox"
+locale: ja_JP
+
+# Theme
+theme: minima
+remote_theme: jekyll/minima
+
+# Plugins
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
+  - jekyll-github-metadata
+
+# Build settings
+markdown: kramdown
+kramdown:
+  syntax_highlighter: rouge
+
+# Exclude from build
+exclude:
+  - .github/
+  - .gitignore
+  - Gemfile
+  - Gemfile.lock
+  - node_modules/
+  - vendor/
+  - .env
+  - .env.local
+
+# Defaults
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: "default"
+
+# SEO
+twitter:
+  username: "@bpmbox"
