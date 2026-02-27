@@ -157,15 +157,55 @@ GitHub Issue でお気軽にご質問ください：
 - [🐛 バグ報告](https://github.com/kenichimiyata/ai-automation-platform/issues/new?labels=bug)
 - [✨ 機能要望](https://github.com/kenichimiyata/ai-automation-platform/issues/new?labels=enhancement)
 
+## 🌍 GitHub Pages セットアップ
+
+本プロジェクトは GitHub Pages で自動的にドキュメント化されます（Jekyll）。
+
+### ページ有効化手順
+
+1. **リポジトリの Settings へアクセス**
+   ```
+   https://github.com/bpmbox/ai-automation-platform/settings/pages
+   ```
+
+2. **Pages セクションで以下を設定**
+   - **Source**: `Deploy from a branch`
+   - **Branch**: `main`
+   - **Folder**: `/docs`
+
+3. **Save をクリック**
+
+4. **デプロイ完了を待つ**（2-5分）
+
+5. **公開 URL にアクセス**
+   ```
+   https://bpmbox.github.io/ai-automation-platform/
+   ```
+
+### ドキュメント構成
+
+```
+docs/
+├── index.md              # ランディングページ
+├── _config.yml           # Jekyll 設定
+└── wiki/
+    ├── Home.md           # Wiki ホーム
+    └── System-Architecture.md  # アーキテクチャ解説
+```
+
+---
+
 ## 📜 ライセンス
 
 このドキュメントは MIT License で公開されています。
 
 ## 🔗 リンク
 
+- **📚 GitHub Pages**: https://bpmbox.github.io/ai-automation-platform/
+- **📋 Project Board**: https://github.com/orgs/bpmbox/projects/6
+- **📂 Repository**: https://github.com/bpmbox/ai-automation-platform
 - **📧 Contact**: k.miyata@urlounge.co.jp
 - **🏢 Organization**: urlounge-ds
-- **📺 Demo**: 準備中
 
 ---
 
