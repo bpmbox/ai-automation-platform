@@ -1,0 +1,90 @@
+{
+  "name": "GitHub Issue作成 from Chat",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "chat-to-issue",
+        "options": {}
+      },
+      "id": "webhook-chat",
+      "name": "チャット受信",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.github.com/repos/urlounge-ds/PhPRunner_11/dispatches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.githubToken }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"event_type\": \"issue_data\",\n  \"client_payload\": {\n    \"title\": \"[Chat] {{ $json.message.substring(0, 100) }}\",\n    \"body\": \"## チャットから作成\\n\\n**ユーザー入力:**\\n{{ $json.message }}\\n\\n**作成日時:** {{ $now.toISO() }}\\n\\n---\\n\\n自動解析・対応中...\",\n    \"labels\": [\"chat-created\", \"auto\", \"{{ $json.priority || 'medium' }}\"]\n  }\n}",
+        "options": {}
+      },
+      "id": "github-issue",
+      "name": "GitHub Issue作成",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.chatWebhookUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"✅ GitHub Issueを作成しました\\n\\n📋 タイトル: {{ $('チャット受信').item.json.message.substring(0, 50) }}...\\n\\n🔗 Issues一覧: https://github.com/urlounge-ds/PhPRunner_11/issues\\n\\n⏱️ Remote Copilotが30秒以内に自動対応を開始します\"\n}",
+        "options": {}
+      },
+      "id": "notify-chat",
+      "name": "Google Chat通知",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [600, 0]
+    }
+  ],
+  "connections": {
+    "チャット受信": {
+      "main": [
+        [
+          {
+            "node": "GitHub Issue作成",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GitHub Issue作成": {
+      "main": [
+        [
+          {
+            "node": "Google Chat通知",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "active": false
+}

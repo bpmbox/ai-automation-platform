@@ -1,0 +1,116 @@
+{
+  "name": "PhPRunner11 - Auto Issue Management",
+  "active": true,
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Issue Request Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "parameters": {
+        "path": "phprunner11-issue",
+        "httpMethod": "POST",
+        "responseMode": "lastNode"
+      }
+    },
+    {
+      "id": "extract-data",
+      "name": "Extract Issue Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300],
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    title: $input.item.json.title || $input.item.json.issue_title || 'New Issue',\n    body: $input.item.json.body || $input.item.json.description || $input.item.json.issue_body || '',\n    source: $input.item.json.source || 'webhook',\n    repository: 'urlounge-ds/PhPRunner_11'\n  }\n}];"
+      }
+    },
+    {
+      "id": "create-issue",
+      "name": "Create GitHub Issue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 300],
+      "parameters": {
+        "url": "https://api.github.com/repos/urlounge-ds/PhPRunner_11/issues",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "=Bearer {{GITHUB_TOKEN}}"},
+            {"name": "Accept", "value": "application/vnd.github+json"},
+            {"name": "X-GitHub-Api-Version", "value": "2022-11-28"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ \"title\": $json.title, \"body\": $json.body + \"\\n\\n---\\n🤖 Created via n8n workflow from: \" + $json.source }}"
+      }
+    },
+    {
+      "id": "assign-copilot",
+      "name": "Assign Copilot Bot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 300],
+      "parameters": {
+        "url": "https://api.github.com/graphql",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "=Bearer {{GITHUB_TOKEN}}"},
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { query: \"mutation { addAssigneesToAssignable(input: { assignableId: \\\"\" + $json.node_id + \"\\\", assigneeIds: [\\\"BOT_kgDOC9w8XQ\\\"] }) { assignable { ... on Issue { id number title } } } }\" } }}"
+      }
+    },
+    {
+      "id": "notify-chat",
+      "name": "Notify Google Chat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 300],
+      "parameters": {
+        "url": "={{ENV.GOOGLE_CHAT_WEBHOOK}}",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { cardsV2: [{ card: { header: { title: \"🎫 新しいIssue作成（n8n経由）\", subtitle: \"Issue \" + $('create-issue').item.json.number, imageUrl: \"https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png\" }, sections: [{ header: \"詳細情報\", widgets: [ { textParagraph: { text: \"<b>タイトル:</b><br>\" + $('create-issue').item.json.title } }, { textParagraph: {text: \"<b>作成元:</b> \" + $('extract-data').item.json.source } }, { textParagraph: { text: \"<b>アサイン:</b> ✅ Copilot自動割り当て完了\" } } ] }, { widgets: [{ buttonList: { buttons: [{ text: \"Issue を開く\", onClick: { openLink: { url: $('create-issue').item.json.html_url } } }] } }] }] } }] } }}"
+      }
+    },
+    {
+      "id": "final-response",
+      "name": "Return Success Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 300],
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    status: 'success',\n    message: 'Issue ' + $('create-issue').item.json.number + ' created and assigned to Copilot',\n    issue_url: $('create-issue').item.json.html_url,\n    issue_number: $('create-issue').item.json.number\n  }\n}];"
+      }
+    }
+  ],
+  "connections": {
+    "webhook-trigger": {
+      "main": [[{"node": "extract-data", "type": "main", "index": 0}]]
+    },
+    "extract-data": {
+      "main": [[{"node": "create-issue", "type": "main", "index": 0}]]
+    },
+    "create-issue": {
+      "main": [[{"node": "assign-copilot", "type": "main", "index": 0}]]
+    },
+    "assign-copilot": {
+      "main": [[{"node": "notify-chat", "type": "main", "index": 0}]]
+    },
+    "notify-chat": {
+      "main": [[{"node": "final-response", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}
