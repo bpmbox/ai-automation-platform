@@ -1,0 +1,227 @@
+{
+  "name": "Workflow #2: Issue自動分類",
+  "active": true,
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "GitHub Issue Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "parameters": {
+        "path": "github-issue-classify",
+        "httpMethod": "POST",
+        "responseMode": "lastNode"
+      }
+    },
+    {
+      "id": "check-action",
+      "name": "アクション判定",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [450, 300],
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.action}}",
+              "operation": "equals",
+              "value2": "opened"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "extract-issue-data",
+      "name": "Issue データ抽出",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 250],
+      "parameters": {
+        "jsCode": "const issue = $input.item.json.issue;\nconst title = issue.title.toLowerCase();\nconst body = (issue.body || '').toLowerCase();\nconst text = title + ' ' + body;\n\nreturn [{\n  json: {\n    issue_number: issue.number,\n    issue_url: issue.html_url,\n    node_id: issue.node_id,\n    title: issue.title,\n    body: issue.body,\n    text: text,\n    repository: $input.item.json.repository.full_name\n  }\n}];"
+      }
+    },
+    {
+      "id": "classify-issue",
+      "name": "ルールベース分類",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 250],
+      "parameters": {
+        "jsCode": "const text = $input.item.json.text;\nconst labels = [];\nlet assignee = null;\n\n// 優先度判定\nif (text.includes('緊急') || text.includes('asap') || text.includes('urgent')) {\n  labels.push('priority: high');\n  assignee = 'kenichimiyata';\n} else if (text.includes('低優先度') || text.includes('low priority')) {\n  labels.push('priority: low');\n} else {\n  labels.push('priority: medium');\n}\n\n// カテゴリ判定\nif (text.includes('バグ') || text.includes('bug') || text.includes('エラー') || text.includes('error')) {\n  labels.push('bug');\n  assignee = 'poe-dari-san';\n} else if (text.includes('機能追加') || text.includes('feature') || text.includes('enhancement')) {\n  labels.push('enhancement');\n  if (!assignee) assignee = 'kenichimiyata';\n} else if (text.includes('ドキュメント') || text.includes('document') || text.includes('docs')) {\n  labels.push('documentation');\n  labels.push('priority: low');\n}\n\n// デフォルト担当者\nif (!assignee) {\n  assignee = 'kenichimiyata';\n}\n\nreturn [{\n  json: {\n    issue_number: $input.item.json.issue_number,\n    issue_url: $input.item.json.issue_url,\n    node_id: $input.item.json.node_id,\n    title: $input.item.json.title,\n    labels: labels,\n    assignee: assignee,\n    repository: $input.item.json.repository\n  }\n}];"
+      }
+    },
+    {
+      "id": "add-labels",
+      "name": "ラベル追加",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 200],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{$json.repository}}/issues/{{$json.issue_number}}/labels",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.GITHUB_TOKEN}}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"labels\": $json.labels } }}"
+      }
+    },
+    {
+      "id": "assign-user",
+      "name": "担当者アサイン",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 300],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{$('classify-issue').item.json.repository}}/issues/{{$('classify-issue').item.json.issue_number}}/assignees",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.GITHUB_TOKEN}}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"assignees\": [$('classify-issue').item.json.assignee] } }}"
+      }
+    },
+    {
+      "id": "notify-chat",
+      "name": "分類完了通知",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 250],
+      "parameters": {
+        "url": "={{$env.GOOGLE_CHAT_WEBHOOK}}",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { cardsV2: [{ card: { header: { title: \"🏷️ Issue自動分類完了\", subtitle: \"Issue #\" + $('classify-issue').item.json.issue_number, imageUrl: \"https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png\" }, sections: [{ header: \"分類結果\", widgets: [ { textParagraph: { text: \"<b>タイトル:</b><br>\" + $('classify-issue').item.json.title } }, { textParagraph: { text: \"<b>ラベル:</b> \" + $('classify-issue').item.json.labels.join(', ') } }, { textParagraph: { text: \"<b>担当者:</b> @\" + $('classify-issue').item.json.assignee } } ] }, { widgets: [{ buttonList: { buttons: [{ text: \"Issue を開く\", onClick: { openLink: { url: $('classify-issue').item.json.issue_url } } }] } }] }] } }] } }}"
+      }
+    },
+    {
+      "id": "return-response",
+      "name": "レスポンス返却",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1450, 250],
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    status: 'success',\n    message: 'Issue分類完了',\n    issue_number: $('classify-issue').item.json.issue_number,\n    labels: $('classify-issue').item.json.labels,\n    assignee: $('classify-issue').item.json.assignee\n  }\n}];"
+      }
+    }
+  ],
+  "connections": {
+    "webhook-trigger": {
+      "main": [
+        [
+          {
+            "node": "check-action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check-action": {
+      "main": [
+        [
+          {
+            "node": "extract-issue-data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extract-issue-data": {
+      "main": [
+        [
+          {
+            "node": "classify-issue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "classify-issue": {
+      "main": [
+        [
+          {
+            "node": "add-labels",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "assign-user",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add-labels": {
+      "main": [
+        [
+          {
+            "node": "notify-chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "assign-user": {
+      "main": [
+        [
+          {
+            "node": "notify-chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "notify-chat": {
+      "main": [
+        [
+          {
+            "node": "return-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "ai-automation",
+      "id": "auto-2"
+    }
+  ]
+}

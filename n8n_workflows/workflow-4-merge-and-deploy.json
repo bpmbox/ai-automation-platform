@@ -1,0 +1,316 @@
+{
+  "name": "Workflow #4: マージ＆デプロイ",
+  "active": true,
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "PR Approved Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "parameters": {
+        "path": "github-pr-approved",
+        "httpMethod": "POST",
+        "responseMode": "lastNode"
+      }
+    },
+    {
+      "id": "check-approval",
+      "name": "承認状態確認",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300],
+      "parameters": {
+        "jsCode": "const review = $input.item.json.review;\nconst pullRequest = $input.item.json.pull_request;\n\nif (review.state !== 'approved') {\n  throw new Error(`承認済みではありません: ${review.state}`);\n}\n\nreturn [{\n  json: {\n    pr_number: pullRequest.number,\n    pr_url: pullRequest.html_url,\n    head_branch: pullRequest.head.ref,\n    base_branch: pullRequest.base.ref,\n    repository: $input.item.json.repository.full_name,\n    reviewer: review.user.login,\n    sha: pullRequest.head.sha\n  }\n}];"
+      }
+    },
+    {
+      "id": "merge-pr",
+      "name": "PR マージ",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 300],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{$json.repository}}/pulls/{{$json.pr_number}}/merge",
+        "method": "PUT",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.GITHUB_TOKEN}}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"commit_title\": \"Merge PR #\" + $json.pr_number, \"commit_message\": \"✅ Approved by @\" + $json.reviewer, \"sha\": $json.sha, \"merge_method\": \"squash\" } }}"
+      }
+    },
+    {
+      "id": "detect-project",
+      "name": "プロジェクト検出",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300],
+      "parameters": {
+        "jsCode": "const repo = $('check-approval').item.json.repository;\nconst branch = $('check-approval').item.json.head_branch;\n\nlet deployTarget = null;\nlet deployUrl = null;\nlet healthCheckUrl = null;\n\n// リポジトリからプロジェクト判定\nif (repo.includes('shop11')) {\n  deployTarget = 'shop11';\n  deployUrl = 'https://shop11.urlounge.co.jp';\n  healthCheckUrl = 'https://shop11.urlounge.co.jp/health';\n} else if (repo.includes('PhPRunner_11')) {\n  deployTarget = 'PhPRunner_11';\n  deployUrl = 'https://phprunner11.urlounge.co.jp';\n  healthCheckUrl = 'https://phprunner11.urlounge.co.jp/health';\n} else if (repo.includes('localProject')) {\n  deployTarget = 'localProject';\n  deployUrl = 'http://localhost:7861';\n  healthCheckUrl = 'http://localhost:7861/health';\n} else {\n  deployTarget = 'unknown';\n  deployUrl = null;\n  healthCheckUrl = null;\n}\n\nreturn [{\n  json: {\n    ...($('check-approval').item.json),\n    deployTarget: deployTarget,\n    deployUrl: deployUrl,\n    healthCheckUrl: healthCheckUrl,\n    merged: $('merge-pr').item.json.merged\n  }\n}];"
+      }
+    },
+    {
+      "id": "trigger-deploy",
+      "name": "デプロイトリガー",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 300],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{$json.repository}}/actions/workflows/deploy.yml/dispatches",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.GITHUB_TOKEN}}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"ref\": $json.base_branch, \"inputs\": { \"target\": $json.deployTarget, \"pr_number\": String($json.pr_number) } } }}"
+      }
+    },
+    {
+      "id": "wait-deploy",
+      "name": "デプロイ待機",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 300],
+      "parameters": {
+        "jsCode": "// 30秒待機（実際のデプロイを待つ）\nawait new Promise(resolve => setTimeout(resolve, 30000));\n\nreturn [{\n  json: {\n    ...($input.item.json),\n    deployCompleted: true\n  }\n}];"
+      }
+    },
+    {
+      "id": "health-check",
+      "name": "ヘルスチェック",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1450, 300],
+      "parameters": {
+        "url": "={{$('detect-project').item.json.healthCheckUrl}}",
+        "method": "GET",
+        "sendHeaders": true,
+        "options": {
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "check-result",
+      "name": "結果判定",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1650, 300],
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.statusCode}}",
+              "operation": "smallerEqual",
+              "value2": 299
+            },
+            {
+              "value1": "={{$json.statusCode}}",
+              "operation": "largerEqual",
+              "value2": 200
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "success-notification",
+      "name": "成功通知",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1850, 200],
+      "parameters": {
+        "url": "={{$env.GOOGLE_CHAT_WEBHOOK}}",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { cardsV2: [{ card: { header: { title: \"✅ デプロイ成功\", subtitle: $('detect-project').item.json.deployTarget, imageUrl: \"https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png\" }, sections: [{ header: \"デプロイ情報\", widgets: [ { textParagraph: { text: \"<b>PR:</b> #\" + $('detect-project').item.json.pr_number } }, { textParagraph: { text: \"<b>プロジェクト:</b> \" + $('detect-project').item.json.deployTarget } }, { textParagraph: { text: \"<b>デプロイURL:</b><br>\" + $('detect-project').item.json.deployUrl } }, { textParagraph: { text: \"<b>ヘルスチェック:</b> ✅ 正常\" } } ] }, { widgets: [{ buttonList: { buttons: [{ text: \"サイトを開く\", onClick: { openLink: { url: $('detect-project').item.json.deployUrl } } }] } }] }] } }] } }}"
+      }
+    },
+    {
+      "id": "failure-notification",
+      "name": "失敗通知",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1850, 400],
+      "parameters": {
+        "url": "={{$env.GOOGLE_CHAT_WEBHOOK}}",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { cardsV2: [{ card: { header: { title: \"❌ デプロイ失敗\", subtitle: $('detect-project').item.json.deployTarget, imageUrl: \"https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png\" }, sections: [{ header: \"エラー情報\", widgets: [ { textParagraph: { text: \"<b>PR:</b> #\" + $('detect-project').item.json.pr_number } }, { textParagraph: { text: \"<b>プロジェクト:</b> \" + $('detect-project').item.json.deployTarget } }, { textParagraph: { text: \"<b>ヘルスチェック:</b> ❌ 失敗 (Status: \" + $json.statusCode + \")\" } }, { textParagraph: { text: \"<b>アクション:</b> ロールバックが必要です\" } } ] }, { widgets: [{ buttonList: { buttons: [{ text: \"PR を確認\", onClick: { openLink: { url: $('detect-project').item.json.pr_url } } }] } }] }] } }] } }}"
+      }
+    },
+    {
+      "id": "return-success",
+      "name": "成功レスポンス",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2050, 200],
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    status: 'success',\n    message: 'デプロイ成功',\n    project: $('detect-project').item.json.deployTarget,\n    deployUrl: $('detect-project').item.json.deployUrl,\n    pr_number: $('detect-project').item.json.pr_number,\n    healthCheck: 'passed'\n  }\n}];"
+      }
+    },
+    {
+      "id": "return-failure",
+      "name": "失敗レスポンス",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2050, 400],
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    status: 'failure',\n    message: 'デプロイ失敗',\n    project: $('detect-project').item.json.deployTarget,\n    pr_number: $('detect-project').item.json.pr_number,\n    healthCheck: 'failed',\n    statusCode: $input.item.json.statusCode,\n    action: 'rollback_required'\n  }\n}];"
+      }
+    }
+  ],
+  "connections": {
+    "webhook-trigger": {
+      "main": [
+        [
+          {
+            "node": "check-approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check-approval": {
+      "main": [
+        [
+          {
+            "node": "merge-pr",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "merge-pr": {
+      "main": [
+        [
+          {
+            "node": "detect-project",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "detect-project": {
+      "main": [
+        [
+          {
+            "node": "trigger-deploy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "trigger-deploy": {
+      "main": [
+        [
+          {
+            "node": "wait-deploy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "wait-deploy": {
+      "main": [
+        [
+          {
+            "node": "health-check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "health-check": {
+      "main": [
+        [
+          {
+            "node": "check-result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check-result": {
+      "main": [
+        [
+          {
+            "node": "success-notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "failure-notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "success-notification": {
+      "main": [
+        [
+          {
+            "node": "return-success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "failure-notification": {
+      "main": [
+        [
+          {
+            "node": "return-failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "ai-automation",
+      "id": "auto-4"
+    }
+  ]
+}

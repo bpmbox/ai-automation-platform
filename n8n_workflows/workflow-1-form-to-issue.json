@@ -1,0 +1,138 @@
+{
+  "name": "Workflow #1: Google Form → GitHub Issue",
+  "active": true,
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Google Form Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "parameters": {
+        "path": "google-form-to-issue",
+        "httpMethod": "POST",
+        "responseMode": "lastNode"
+      }
+    },
+    {
+      "id": "validate-data",
+      "name": "データ検証",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300],
+      "parameters": {
+        "jsCode": "const requiredFields = ['title', 'description', 'priority', 'category'];\nconst data = $input.item.json;\n\n// 必須フィールドチェック\nfor (const field of requiredFields) {\n  if (!data[field]) {\n    throw new Error(`必須フィールドが不足: ${field}`);\n  }\n}\n\n// 優先度の検証\nconst validPriorities = ['high', 'medium', 'low'];\nif (!validPriorities.includes(data.priority)) {\n  data.priority = 'medium'; // デフォルト\n}\n\n// カテゴリの検証\nconst validCategories = ['feature', 'bug', 'enhancement'];\nif (!validCategories.includes(data.category)) {\n  data.category = 'feature'; // デフォルト\n}\n\nreturn [{\n  json: {\n    title: data.title.trim(),\n    body: `## 要件内容\\n${data.description}\\n\\n## 詳細\\n- **優先度**: ${data.priority}\\n- **カテゴリ**: ${data.category}\\n- **要求者**: ${data.requester || '不明'}\\n\\n---\\n🤖 Google Form から自動作成`,\n    labels: [data.category, `priority: ${data.priority}`],\n    priority: data.priority,\n    requester: data.requester || '不明'\n  }\n}];"
+      }
+    },
+    {
+      "id": "create-issue",
+      "name": "GitHub Issue 作成",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 300],
+      "parameters": {
+        "url": "https://api.github.com/repos/kenichimiyata/ai-automation-dashboard/issues",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.GITHUB_TOKEN}}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"title\": $json.title, \"body\": $json.body, \"labels\": $json.labels } }}"
+      }
+    },
+    {
+      "id": "notify-chat",
+      "name": "Google Chat 通知",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 300],
+      "parameters": {
+        "url": "={{$env.GOOGLE_CHAT_WEBHOOK}}",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { cardsV2: [{ card: { header: { title: \"📝 新規Issue作成（Google Form）\", subtitle: \"Issue #\" + $('create-issue').item.json.number, imageUrl: \"https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png\" }, sections: [{ header: \"詳細情報\", widgets: [ { textParagraph: { text: \"<b>タイトル:</b><br>\" + $('create-issue').item.json.title } }, { textParagraph: { text: \"<b>優先度:</b> \" + $('validate-data').item.json.priority } }, { textParagraph: { text: \"<b>要求者:</b> \" + $('validate-data').item.json.requester } } ] }, { widgets: [{ buttonList: { buttons: [{ text: \"Issue を開く\", onClick: { openLink: { url: $('create-issue').item.json.html_url } } }] } }] }] } }] } }}"
+      }
+    },
+    {
+      "id": "return-response",
+      "name": "レスポンス返却",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300],
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    status: 'success',\n    message: 'Issue作成完了',\n    issue_url: $('create-issue').item.json.html_url,\n    issue_number: $('create-issue').item.json.number,\n    created_at: $('create-issue').item.json.created_at\n  }\n}];"
+      }
+    }
+  ],
+  "connections": {
+    "webhook-trigger": {
+      "main": [
+        [
+          {
+            "node": "validate-data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "validate-data": {
+      "main": [
+        [
+          {
+            "node": "create-issue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "create-issue": {
+      "main": [
+        [
+          {
+            "node": "notify-chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "notify-chat": {
+      "main": [
+        [
+          {
+            "node": "return-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "ai-automation",
+      "id": "auto-1"
+    }
+  ]
+}

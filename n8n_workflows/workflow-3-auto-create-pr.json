@@ -1,0 +1,214 @@
+{
+  "name": "Workflow #3: PR自動作成",
+  "active": true,
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Branch Push Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "parameters": {
+        "path": "github-branch-push",
+        "httpMethod": "POST",
+        "responseMode": "lastNode"
+      }
+    },
+    {
+      "id": "check-branch",
+      "name": "ブランチ判定",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300],
+      "parameters": {
+        "jsCode": "const ref = $input.item.json.ref || '';\nconst branch = ref.replace('refs/heads/', '');\n\n// feature/, bugfix/, docs/ ブランチのみ処理\nconst validPrefixes = ['feature/', 'bugfix/', 'docs/'];\nconst isValid = validPrefixes.some(prefix => branch.startsWith(prefix));\n\nif (!isValid) {\n  throw new Error(`対象外ブランチ: ${branch}`);\n}\n\n// Issue番号抽出 (例: feature/issue-123)\nconst issueMatch = branch.match(/issue-(\\d+)/);\nconst issueNumber = issueMatch ? issueMatch[1] : null;\n\n// ブランチタイプ判定\nlet branchType = 'feature';\nlet reviewer = 'kenichimiyata';\n\nif (branch.startsWith('bugfix/')) {\n  branchType = 'bugfix';\n  reviewer = 'poe-dari-san';\n} else if (branch.startsWith('docs/')) {\n  branchType = 'docs';\n  reviewer = 'kenichimiyata';\n}\n\nreturn [{\n  json: {\n    branch: branch,\n    branchType: branchType,\n    issueNumber: issueNumber,\n    reviewer: reviewer,\n    repository: $input.item.json.repository.full_name,\n    pusher: $input.item.json.pusher.name,\n    commits: $input.item.json.commits || []\n  }\n}];"
+      }
+    },
+    {
+      "id": "get-commits",
+      "name": "コミット情報収集",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300],
+      "parameters": {
+        "jsCode": "const commits = $input.item.json.commits || [];\nconst commitMessages = commits.map(c => `- ${c.message}`).join('\\n');\n\nreturn [{\n  json: {\n    ...($input.item.json),\n    commitMessages: commitMessages,\n    commitCount: commits.length\n  }\n}];"
+      }
+    },
+    {
+      "id": "create-pr-body",
+      "name": "PR本文生成",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300],
+      "parameters": {
+        "jsCode": "const data = $input.item.json;\nconst issueLink = data.issueNumber ? `Closes #${data.issueNumber}` : '関連Issue: なし';\n\nconst prBody = `## 変更内容\n\n${data.commitMessages || 'コミットメッセージなし'}\n\n## 関連Issue\n\n${issueLink}\n\n## ブランチ情報\n\n- **ブランチ**: ${data.branch}\n- **タイプ**: ${data.branchType}\n- **コミット数**: ${data.commitCount}\n- **作成者**: @${data.pusher}\n\n## チェックリスト\n\n- [ ] コードレビュー完了\n- [ ] テスト実施\n- [ ] ドキュメント更新\n- [ ] 動作確認完了\n\n---\n🤖 n8n により自動生成されたPR`;\n\nconst prTitle = data.issueNumber \n  ? `[${data.branchType}] Issue #${data.issueNumber} の対応` \n  : `[${data.branchType}] ${data.branch} の変更`;\n\nreturn [{\n  json: {\n    ...data,\n    prTitle: prTitle,\n    prBody: prBody,\n    base: 'main',\n    head: data.branch\n  }\n}];"
+      }
+    },
+    {
+      "id": "create-pr",
+      "name": "PR作成",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 300],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{$json.repository}}/pulls",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.GITHUB_TOKEN}}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"title\": $json.prTitle, \"body\": $json.prBody, \"head\": $json.head, \"base\": $json.base, \"draft\": false } }}"
+      }
+    },
+    {
+      "id": "assign-reviewer",
+      "name": "レビュアーアサイン",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 300],
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{$('create-pr-body').item.json.repository}}/pulls/{{$('create-pr').item.json.number}}/requested_reviewers",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.GITHUB_TOKEN}}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"reviewers\": [$('create-pr-body').item.json.reviewer] } }}"
+      }
+    },
+    {
+      "id": "notify-chat",
+      "name": "PR作成通知",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1450, 300],
+      "parameters": {
+        "url": "={{$env.GOOGLE_CHAT_WEBHOOK}}",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { cardsV2: [{ card: { header: { title: \"🔀 PR自動作成完了\", subtitle: \"PR #\" + $('create-pr').item.json.number, imageUrl: \"https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png\" }, sections: [{ header: \"PR情報\", widgets: [ { textParagraph: { text: \"<b>タイトル:</b><br>\" + $('create-pr').item.json.title } }, { textParagraph: { text: \"<b>ブランチ:</b> \" + $('create-pr-body').item.json.branch + \" → main\" } }, { textParagraph: { text: \"<b>レビュアー:</b> @\" + $('create-pr-body').item.json.reviewer } }, { textParagraph: { text: \"<b>コミット数:</b> \" + $('create-pr-body').item.json.commitCount } } ] }, { widgets: [{ buttonList: { buttons: [{ text: \"PR を開く\", onClick: { openLink: { url: $('create-pr').item.json.html_url } } }] } }] }] } }] } }}"
+      }
+    },
+    {
+      "id": "return-response",
+      "name": "レスポンス返却",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1650, 300],
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    status: 'success',\n    message: 'PR作成完了',\n    pr_url: $('create-pr').item.json.html_url,\n    pr_number: $('create-pr').item.json.number,\n    reviewer: $('create-pr-body').item.json.reviewer\n  }\n}];"
+      }
+    }
+  ],
+  "connections": {
+    "webhook-trigger": {
+      "main": [
+        [
+          {
+            "node": "check-branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check-branch": {
+      "main": [
+        [
+          {
+            "node": "get-commits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get-commits": {
+      "main": [
+        [
+          {
+            "node": "create-pr-body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "create-pr-body": {
+      "main": [
+        [
+          {
+            "node": "create-pr",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "create-pr": {
+      "main": [
+        [
+          {
+            "node": "assign-reviewer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "assign-reviewer": {
+      "main": [
+        [
+          {
+            "node": "notify-chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "notify-chat": {
+      "main": [
+        [
+          {
+            "node": "return-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "ai-automation",
+      "id": "auto-3"
+    }
+  ]
+}
