@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDCA Cycle Flow - AI Automation Platform</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .tabs {
+            display: flex;
+            background: #f5f5f5;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .tab {
+            flex: 1;
+            padding: 15px 20px;
+            cursor: pointer;
+            text-align: center;
+            font-weight: 600;
+            transition: all 0.3s;
+            border-right: 1px solid #e0e0e0;
+        }
+        
+        .tab:last-child {
+            border-right: none;
+        }
+        
+        .tab:hover {
+            background: #e8e8e8;
+        }
+        
+        .tab.active {
+            background: white;
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .mermaid {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: block;
+            text-align: center;
+            min-height: 400px;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .info-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .info-card h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .info-card ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .info-card li {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.3);
+        }
+        
+        .info-card li:last-child {
+            border-bottom: none;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+        
+        .badge.ai {
+            background: #f0e1ff;
+            color: #764ba2;
+        }
+        
+        .badge.human {
+            background: #e1f5ff;
+            color: #0066cc;
+        }
+        
+        .badge.complete {
+            background: #e1ffe1;
+            color: #00aa00;
+        }
+        
+        .badge.pending {
+            background: #ffe1e1;
+            color: #cc0000;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 30px 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 8px;
+            color: white;
+        }
+        
+        .stat {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 3em;
+            font-weight: bold;
+            display: block;
+        }
+        
+        .stat-label {
+            font-size: 1em;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        th {
+            background: #667eea;
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        tr:hover {
+            background: #f5f5f5;
+        }
+        
+        .phase {
+            margin: 30px 0;
+            padding: 20px;
+            background: white;
+            border-left: 4px solid #667eea;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .phase h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+        
+        .phase-plan { border-left-color: #e1f5ff; }
+        .phase-do { border-left-color: #fff4e1; }
+        .phase-check { border-left-color: #e1ffe1; }
+        .phase-act { border-left-color: #ffe1e1; }
+        
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        
+        .url {
+            font-size: 0.85em;
+            color: #666;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔄 PDCA Cycle Flow</h1>
+            <p>AI Automation Platform - GitHub Actions + n8n Webhooks</p>
+        </div>
+        
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('overview')">📊 Overview</div>
+            <div class="tab" onclick="switchTab('flow')">🔄 Flow Diagram</div>
+            <div class="tab" onclick="switchTab('details')">📋 Details</div>
+            <div class="tab" onclick="switchTab('setup')">⚙️ Setup Status</div>
+        </div>
+        
+        <div class="content">
+            <!-- Overview Tab -->
+            <div id="overview" class="tab-content active">
+                <h2>システム概要</h2>
+                <p style="margin: 20px 0; font-size: 1.1em; line-height: 1.6;">
+                    GitHub Actions と n8n Webhooks が連携して実現する、完全自動化されたPDCAサイクル。<br>
+                    要件定義からデプロイまでを85%自動化し、継続的な改善サイクルを実現します。
+                </p>
+                
+                <div class="stats">
+                    <div class="stat">
+                        <span class="stat-value">85%</span>
+                        <span class="stat-label">自動化率</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">20</span>
+                        <span class="stat-label">総ステップ数</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">17</span>
+                        <span class="stat-label">自動化ステップ</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">4</span>
+                        <span class="stat-label">n8n Workflows</span>
+                    </div>
+                </div>
+                
+                <div class="info-grid">
+                    <div class="info-card">
+                        <h3>🎯 PLAN - 計画</h3>
+                        <ul>
+                            <li>Google Form で要件入力<span class="badge human">Human</span></li>
+                            <li>GitHub Issue 自動作成<span class="badge ai">AI</span></li>
+                            <li>Supabase 同期<span class="badge ai">AI</span></li>
+                            <li>通知配信<span class="badge ai">AI</span></li>
+                        </ul>
+                    </div>
+                    
+                    <div class="info-card">
+                        <h3>🚀 DO - 実行</h3>
+                        <ul>
+                            <li>Issue 自動分類<span class="badge ai">AI</span></li>
+                            <li>担当者割り当て<span class="badge ai">AI</span></li>
+                            <li>コード実装<span class="badge human">Human+AI</span></li>
+                            <li>PR 自動作成<span class="badge ai">AI</span></li>
+                        </ul>
+                    </div>
+                    
+                    <div class="info-card">
+                        <h3>✅ CHECK - 評価</h3>
+                        <ul>
+                            <li>コードレビュー<span class="badge human">Human</span></li>
+                            <li>テスト自動実行<span class="badge ai">AI</span></li>
+                            <li>結果通知<span class="badge ai">AI</span></li>
+                            <li>PR 承認<span class="badge human">Human</span></li>
+                        </ul>
+                    </div>
+                    
+                    <div class="info-card">
+                        <h3>🔄 ACT - 改善</h3>
+                        <ul>
+                            <li>自動マージ<span class="badge ai">AI</span></li>
+                            <li>自動デプロイ<span class="badge ai">AI</span></li>
+                            <li>結果記録<span class="badge ai">AI</span></li>
+                            <li>次サイクルへ<span class="badge ai">AI</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Flow Diagram Tab -->
+            <div id="flow" class="tab-content">
+                <h2>PDCAフロー図</h2>
+                <div class="mermaid">
+graph LR
+    A[Google Form] --> B[GitHub Issue]
+    B --> C[Supabase]
+    C --> D[通知]
+    B --> F[n8n分類]
+    F --> G[Issue更新]
+    G --> H[実装]
+    H --> I[Push]
+    I --> J[n8n PR作成]
+    J --> K[Review]
+    K --> L[Test]
+    L --> M[Approve]
+    M --> N[n8n Merge]
+    N --> O[Deploy]
+    O --> P[記録]
+    P --> A
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style F fill:#f0e1ff
+    style J fill:#f0e1ff
+    style L fill:#e1ffe1
+    style N fill:#f0e1ff
+    style O fill:#ffe1e1
+                </div>
+                
+                <div style="margin-top: 30px; padding: 20px; background: #f9f9f9; border-radius: 8px;">
+                    <h3>色の凡例</h3>
+                    <ul style="list-style: none; padding: 0;">
+                        <li><span style="display: inline-block; width: 20px; height: 20px; background: #e1f5ff; border-radius: 3px; margin-right: 10px;"></span> Human による操作</li>
+                        <li><span style="display: inline-block; width: 20px; height: 20px; background: #f0e1ff; border-radius: 3px; margin-right: 10px;"></span> n8n Workflow による自動化</li>
+                        <li><span style="display: inline-block; width: 20px; height: 20px; background: #e1ffe1; border-radius: 3px; margin-right: 10px;"></span> GitHub Actions による自動化</li>
+                        <li><span style="display: inline-block; width: 20px; height: 20px; background: #fff4e1; border-radius: 3px; margin-right: 10px;"></span> データ保存</li>
+                        <li><span style="display: inline-block; width: 20px; height: 20px; background: #ffe1e1; border-radius: 3px; margin-right: 10px;"></span> デプロイ</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Details Tab -->
+            <div id="details" class="tab-content">
+                <h2>各フェーズ詳細</h2>
+                
+                <div class="phase phase-plan">
+                    <h3>🎯 PLAN（計画）フェーズ</h3>
+                    <p><strong>目的:</strong> 要件定義とタスク作成</p>
+                    <table>
+                        <tr>
+                            <th>ステップ</th>
+                            <th>ツール</th>
+                            <th>自動化</th>
+                            <th>説明</th>
+                        </tr>
+                        <tr>
+                            <td>1. 要件入力</td>
+                            <td>Google Form</td>
+                            <td><span class="badge human">Human</span></td>
+                            <td>ユーザーがタスク内容を入力</td>
+                        </tr>
+                        <tr>
+                            <td>2. Issue作成</td>
+                            <td>n8n Workflow #1</td>
+                            <td><span class="badge ai">AI</span></td>
+                            <td>FormデータをGitHub Issueに変換</td>
+                        </tr>
+                        <tr>
+                            <td>3. データ同期</td>
+                            <td>GitHub Actions</td>
+                            <td><span class="badge ai">AI</span></td>
+                            <td>SupabaseにIssue同期</td>
+                        </tr>
+                        <tr>
+                            <td>4. 通知</td>
+                            <td>GitHub Actions</td>
+                            <td><span class="badge ai">AI</span></td>
+                            <td>Google Chat + VS Code通知</td>
+                        </tr>
+                    </table>
+                    <p class="url"><strong>Webhook URL:</strong> <code>https://kenken999-n8n-free.hf.space/webhook/google-form-to-issue</code></p>
+                </div>
+                
+                <div class="phase phase-do">
+                    <h3>🚀 DO（実行）フェーズ</h3>
+                    <p><strong>目的:</strong> 自動分類と実装</p>
+                    <table>
+                        <tr>
+                            <th>ステップ</th>
+                            <th>ツール</th>
+                            <th>自動化</th>
+                            <th>説明</th>
+                        </tr>
+                        <tr>
+                            <td>1. Issue分類</td>
+                            <td>n8n Workflow #2</td>
+                            <td><span class="badge ai">AI</span></td>
+                            <td>Issue内容を解析してラベル追加</td>
+                        </tr>
+                        <tr>
+                            <td>2. 担当者割り当て</td>
+                            <td>n8n Workflow #2</td>
+                            <td><span class="badge ai">AI</span></td>
+                            <td>適切な開発者/Copilotに自動割り当て</td>
+                        </tr>
+                        <tr>
+                            <td>3. 実装</td>
+                            <td>VS Code Copilot</td>
+                            <td><span class="badge human">Human+AI</span></td>
+                            <td>コード実装（AI支援）</td>
+                        </tr>
+                        <tr>
+                            <td>4. Branch Push</td>
+                            <td>Git</td>
+                            <td><span class="badge human">Human</span></td>
+                            <td>feature branchにpush</td>
+                        </tr>
+                        <tr>
+                            <td>5. PR作成</td>
+                            <td>n8n Workflow #3</td>
+                            <td><span class="badge ai">AI</span></td>
+                            <td>push検知 → PR自動作成</td>
+                        </tr>
+                    </table>
+                    <p class="url"><strong>Issue分類:</strong> <code>https://kenken999-n8n-free.hf.space/webhook/github-issue-classify</code></p>
+                    <p class="url"><strong>PR作成:</strong> <code>https://kenken999-n8n-free.hf.space/webhook/github-branch-push</code></p>
+                </div>
+                
+                <div class="phase phase-check">
+                    <h3>✅ CHECK（評価）フェーズ</h3>
+                    <p><strong>目的:</strong> コード品質の確認</p>
+                    <table>
+                        <tr>
+                            <th>ステップ</th>
+                            <th>ツール</th>
+                            <th>自動化</th>
+                            <th>説明</th>
+                        </tr>
+                        <tr>
+                            <td>1. PRレビュー</td>
+                            <td>GitHub PR</td>
+                            <td><span class="badge human">Human</span></td>
+                            <td>コードレビュー実施</td>
+                        </tr>
+                        <tr>
+                            <td>2. テスト実行</td>
+                            <td>GitHub Actions</td>
+                            <td><span class="badge ai">AI</span></td>
+                            <td>pytest自動実行</td>
+                        </tr>
+                        <tr>
+                            <td>3. 結果通知</td>
+                            <td>GitHub Actions</td>
+                            <td><span class="badge ai">AI</span></td>
+                            <td>テスト結果をGoogle Chatに通知</td>
+                        </tr>
+                        <tr>
+                            <td>4. 承認</td>
+                            <td>GitHub PR</td>
+                            <td><span class="badge human">Human</span></td>
+                            <td>レビュー承認</td>
+                        </tr>
+                    </table>
+                    <p class="url"><strong>GitHub Actions:</strong> <code>sync-issues.yml</code> で自動実行</p>
+                </div>
+                
+                <div class="phase phase-act">
+                    <h3>🔄 ACT（改善）フェーズ</h3>
+                    <p><strong>目的:</strong> デプロイと次サイクルへの反映</p>
+                    <table>
+                        <tr>
+                            <th>ステップ</th>
+                            <th>ツール</th>
+                            <th>自動化</th>
+                            <th>説明</th>
+                        </tr>
+                        <tr>
+                            <td>1. 自動マージ</td>
+                            <td>n8n Workflow #4</td>
+                            <td><span class="badge ai">AI</span></td>
+                            <td>PR承認検知 → main branchにマージ</td>
+                        </tr>
+                        <tr>
+                            <td>2. デプロイ</td>
+                            <td>n8n Workflow #4</td>
+                            <td><span class="badge ai">AI</span></td>
+                            <td>本番環境へ自動デプロイ</td>
+                        </tr>
+                        <tr>
+                            <td>3. 結果記録</td>
+                            <td>n8n Workflow #4</td>
+                            <td><span class="badge ai">AI</span></td>
+                            <td>Supabaseにデプロイ結果保存</td>
+                        </tr>
+                        <tr>
+                            <td>4. Issue Close</td>
+                            <td>GitHub API</td>
+                            <td><span class="badge ai">AI</span></td>
+                            <td>関連Issueを自動クローズ</td>
+                        </tr>
+                    </table>
+                    <p class="url"><strong>Webhook URL:</strong> <code>https://kenken999-n8n-free.hf.space/webhook/github-pr-approved</code></p>
+                </div>
+            </div>
+            
+            <!-- Setup Status Tab -->
+            <div id="setup" class="tab-content">
+                <h2>セットアップ状況</h2>
+                
+                <table>
+                    <tr>
+                        <th>コンポーネント</th>
+                        <th>状態</th>
+                        <th>備考</th>
+                    </tr>
+                    <tr>
+                        <td>Supabase Tables</td>
+                        <td><span class="badge complete">✅ Complete</span></td>
+                        <td>github_issues, ai_responses, ai_agent_state</td>
+                    </tr>
+                    <tr>
+                        <td>GitHub Actions</td>
+                        <td><span class="badge complete">✅ Complete</span></td>
+                        <td>sync-issues.yml（Milestone 2完了）</td>
+                    </tr>
+                    <tr>
+                        <td>n8n Workflow #1</td>
+                        <td><span class="badge complete">✅ Active</span></td>
+                        <td>Google Form → Issue</td>
+                    </tr>
+                    <tr>
+                        <td>n8n Workflow #2</td>
+                        <td><span class="badge complete">✅ Active</span></td>
+                        <td>Issue自動分類</td>
+                    </tr>
+                    <tr>
+                        <td>n8n Workflow #3</td>
+                        <td><span class="badge complete">✅ Active</span></td>
+                        <td>Branch → PR作成</td>
+                    </tr>
+                    <tr>
+                        <td>n8n Workflow #4</td>
+                        <td><span class="badge complete">✅ Active</span></td>
+                        <td>PR → Deploy</td>
+                    </tr>
+                    <tr>
+                        <td>GitHub Webhook #2</td>
+                        <td><span class="badge complete">✅ Configured</span></td>
+                        <td>Issue events → n8n</td>
+                    </tr>
+                    <tr>
+                        <td>GitHub Webhook #3</td>
+                        <td><span class="badge pending">⏳ Pending</span></td>
+                        <td>Push events → n8n（次のステップ）</td>
+                    </tr>
+                    <tr>
+                        <td>GitHub Webhook #4</td>
+                        <td><span class="badge pending">⏳ Pending</span></td>
+                        <td>PR events → n8n（次のステップ）</td>
+                    </tr>
+                    <tr>
+                        <td>Google Form</td>
+                        <td><span class="badge pending">⏳ Pending</span></td>
+                        <td>作成待ち</td>
+                    </tr>
+                </table>
+                
+                <h3 style="margin-top: 30px;">次のステップ</h3>
+                <ol style="line-height: 2; font-size: 1.1em;">
+                    <li><strong>GitHub Webhook #3</strong>: Push イベントでPR自動作成</li>
+                    <li><strong>GitHub Webhook #4</strong>: PR承認でマージ＆デプロイ</li>
+                    <li><strong>Google Form</strong>: Workflow #1 のトリガー作成</li>
+                    <li><strong>E2E テスト</strong>: Form → Issue → PR → Deploy の全フロー確認</li>
+                </ol>
+                
+                <h3 style="margin-top: 30px;">GitHub Actions vs n8n Webhooks</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
+                    <div style="background: #f0f8ff; padding: 20px; border-radius: 8px;">
+                        <h4 style="color: #0066cc; margin-bottom: 15px;">GitHub Actions の役割</h4>
+                        <ul>
+                            <li>データ同期: IssueをSupabaseに同期</li>
+                            <li>通知: Google Chat、VS Code への通知</li>
+                            <li>テスト実行: pytest による品質チェック</li>
+                            <li>リアルタイム監視: Issue/PR イベント監視</li>
+                        </ul>
+                    </div>
+                    
+                    <div style="background: #fff0f8; padding: 20px; border-radius: 8px;">
+                        <h4 style="color: #cc0066; margin-bottom: 15px;">n8n Webhooks の役割</h4>
+                        <ul>
+                            <li>複雑な判断ロジック: AI による Issue 分類</li>
+                            <li>外部連携: Google Form → GitHub</li>
+                            <li>複数ステップの自動化: PR作成 → マージ → デプロイ</li>
+                            <li>条件分岐: 状況に応じた柔軟な処理</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Mermaid初期化
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true
+            }
+        });
+        
+        function switchTab(tabName) {
+            // Hide all tab contents
+            const contents = document.querySelectorAll('.tab-content');
+            contents.forEach(content => content.classList.remove('active'));
+            
+            // Remove active class from all tabs
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            
+            // Show selected tab content
+            document.getElementById(tabName).classList.add('active');
+            
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+            
+            // タブ切り替え後にMermaidを再描画
+            if (tabName === 'flow') {
+                setTimeout(() => {
+                    mermaid.contentLoaded();
+                }, 100);
+            }
+        }
+    </script>
+</body>
+</html>
