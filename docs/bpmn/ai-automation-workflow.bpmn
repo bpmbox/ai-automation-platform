@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                   xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                   xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                   xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                   id="Definitions_1"
+                   targetNamespace="http://bpmn.io/schema/bpmn">
+  
+  <bpmn:process id="AIAutomationWorkflow" name="AI Automation Platform Workflow" isExecutable="true">
+    
+    <!-- Start Event: Google Form 要件定義 -->
+    <bpmn:startEvent id="StartEvent_GoogleForm" name="Google Form&#10;要件定義">
+      <bpmn:outgoing>Flow_FormToN8N1</bpmn:outgoing>
+    </bpmn:startEvent>
+    
+    <!-- Service Task: n8n Workflow #1 - Issue作成 -->
+    <bpmn:serviceTask id="Task_N8N_CreateIssue" name="n8n Workflow #1&#10;GitHub Issue作成">
+      <bpmn:incoming>Flow_FormToN8N1</bpmn:incoming>
+      <bpmn:outgoing>Flow_N8N1ToClassify</bpmn:outgoing>
+      <bpmn:documentation>
+        n8n API: POST /workflows/execute
+        Workflow: google-form-to-github-issue
+        Input: Form data (title, description, priority)
+        Output: GitHub Issue URL, Issue Number
+      </bpmn:documentation>
+    </bpmn:serviceTask>
+    
+    <!-- Service Task: n8n Workflow #2 - Issue分類 -->
+    <bpmn:serviceTask id="Task_N8N_ClassifyIssue" name="n8n Workflow #2&#10;Issue自動分類">
+      <bpmn:incoming>Flow_N8N1ToClassify</bpmn:incoming>
+      <bpmn:outgoing>Flow_ClassifyToGHActions</bpmn:outgoing>
+      <bpmn:documentation>
+        n8n API: POST /workflows/execute
+        Workflow: auto-classify-issue
+        Input: Issue Number, Title, Body
+        Output: Labels, Milestone, Assignee
+      </bpmn:documentation>
+    </bpmn:serviceTask>
+    
+    <!-- Service Task: GitHub Actions - Issue通知 -->
+    <bpmn:serviceTask id="Task_GHA_NotifyIssue" name="GitHub Actions&#10;Google Chat通知">
+      <bpmn:incoming>Flow_ClassifyToGHActions</bpmn:incoming>
+      <bpmn:outgoing>Flow_NotifyToVSCode</bpmn:outgoing>
+      <bpmn:documentation>
+        Workflow: notify-issue-to-googlechat.yml
+        Trigger: issues.opened
+        Action: Send notification to Google Chat
+      </bpmn:documentation>
+    </bpmn:serviceTask>
+    
+    <!-- User Task: VS Code Copilot実装 -->
+    <bpmn:userTask id="Task_VSCode_Implementation" name="VS Code Copilot&#10;実装作業">
+      <bpmn:incoming>Flow_NotifyToVSCode</bpmn:incoming>
+      <bpmn:outgoing>Flow_ImplToN8N3</bpmn:outgoing>
+      <bpmn:documentation>
+        Developer uses VS Code Copilot to implement features
+        Branch: feature/issue-{issueNumber}
+        Commits: Linked to Issue
+      </bpmn:documentation>
+    </bpmn:userTask>
+    
+    <!-- Service Task: n8n Workflow #3 - PR自動作成 -->
+    <bpmn:serviceTask id="Task_N8N_CreatePR" name="n8n Workflow #3&#10;PR自動作成">
+      <bpmn:incoming>Flow_ImplToN8N3</bpmn:incoming>
+      <bpmn:outgoing>Flow_N8N3ToGHActions</bpmn:outgoing>
+      <bpmn:documentation>
+        n8n API: POST /workflows/execute
+        Workflow: auto-create-pr
+        Input: Branch name, Commits
+        Output: PR URL, PR Number
+      </bpmn:documentation>
+    </bpmn:serviceTask>
+    
+    <!-- Service Task: GitHub Actions - PR通知 -->
+    <bpmn:serviceTask id="Task_GHA_NotifyPR" name="GitHub Actions&#10;PR通知">
+      <bpmn:incoming>Flow_N8N3ToGHActions</bpmn:incoming>
+      <bpmn:outgoing>Flow_PRToReview</bpmn:outgoing>
+      <bpmn:documentation>
+        Workflow: notify-pr-to-googlechat.yml
+        Trigger: pull_request.opened
+        Action: Send PR notification to Google Chat
+      </bpmn:documentation>
+    </bpmn:serviceTask>
+    
+    <!-- User Task: レビュー -->
+    <bpmn:userTask id="Task_Review" name="コードレビュー&#10;承認">
+      <bpmn:incoming>Flow_PRToReview</bpmn:incoming>
+      <bpmn:outgoing>Flow_ReviewToGateway</bpmn:outgoing>
+      <bpmn:documentation>
+        Reviewer: poe-dari-san or kenichimiyata
+        Actions: Comment, Approve, Request Changes
+      </bpmn:documentation>
+    </bpmn:userTask>
+    
+    <!-- Exclusive Gateway: レビュー結果判定 -->
+    <bpmn:exclusiveGateway id="Gateway_ReviewDecision" name="承認？">
+      <bpmn:incoming>Flow_ReviewToGateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_Approved</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ChangesRequested</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    
+    <!-- Sequence Flow: 承認された場合 -->
+    <bpmn:sequenceFlow id="Flow_Approved" name="Yes" sourceRef="Gateway_ReviewDecision" targetRef="Task_N8N_Deploy">
+      <bpmn:conditionExpression>approved == true</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    
+    <!-- Sequence Flow: 修正要求の場合 -->
+    <bpmn:sequenceFlow id="Flow_ChangesRequested" name="Changes&#10;Required" sourceRef="Gateway_ReviewDecision" targetRef="Task_VSCode_Implementation">
+      <bpmn:conditionExpression>approved == false</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    
+    <!-- Service Task: n8n Workflow #4 - デプロイ -->
+    <bpmn:serviceTask id="Task_N8N_Deploy" name="n8n Workflow #4&#10;マージ＆デプロイ">
+      <bpmn:incoming>Flow_Approved</bpmn:incoming>
+      <bpmn:outgoing>Flow_DeployToNotify</bpmn:outgoing>
+      <bpmn:documentation>
+        n8n API: POST /workflows/execute
+        Workflow: auto-merge-and-deploy
+        Input: PR Number
+        Output: Deployment status, Production URL
+      </bpmn:documentation>
+    </bpmn:serviceTask>
+    
+    <!-- Service Task: 完了通知 -->
+    <bpmn:serviceTask id="Task_FinalNotification" name="完了通知&#10;Google Chat">
+      <bpmn:incoming>Flow_DeployToNotify</bpmn:incoming>
+      <bpmn:outgoing>Flow_NotifyToEnd</bpmn:outgoing>
+      <bpmn:documentation>
+        Send deployment success notification to Google Chat
+        Include: PR URL, Deploy URL, Commit SHA
+      </bpmn:documentation>
+    </bpmn:serviceTask>
+    
+    <!-- End Event: 完了 -->
+    <bpmn:endEvent id="EndEvent_Complete" name="完了">
+      <bpmn:incoming>Flow_NotifyToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+    
+    <!-- Sequence Flows -->
+    <bpmn:sequenceFlow id="Flow_FormToN8N1" sourceRef="StartEvent_GoogleForm" targetRef="Task_N8N_CreateIssue"/>
+    <bpmn:sequenceFlow id="Flow_N8N1ToClassify" sourceRef="Task_N8N_CreateIssue" targetRef="Task_N8N_ClassifyIssue"/>
+    <bpmn:sequenceFlow id="Flow_ClassifyToGHActions" sourceRef="Task_N8N_ClassifyIssue" targetRef="Task_GHA_NotifyIssue"/>
+    <bpmn:sequenceFlow id="Flow_NotifyToVSCode" sourceRef="Task_GHA_NotifyIssue" targetRef="Task_VSCode_Implementation"/>
+    <bpmn:sequenceFlow id="Flow_ImplToN8N3" sourceRef="Task_VSCode_Implementation" targetRef="Task_N8N_CreatePR"/>
+    <bpmn:sequenceFlow id="Flow_N8N3ToGHActions" sourceRef="Task_N8N_CreatePR" targetRef="Task_GHA_NotifyPR"/>
+    <bpmn:sequenceFlow id="Flow_PRToReview" sourceRef="Task_GHA_NotifyPR" targetRef="Task_Review"/>
+    <bpmn:sequenceFlow id="Flow_ReviewToGateway" sourceRef="Task_Review" targetRef="Gateway_ReviewDecision"/>
+    <bpmn:sequenceFlow id="Flow_DeployToNotify" sourceRef="Task_N8N_Deploy" targetRef="Task_FinalNotification"/>
+    <bpmn:sequenceFlow id="Flow_NotifyToEnd" sourceRef="Task_FinalNotification" targetRef="EndEvent_Complete"/>
+    
+  </bpmn:process>
+  
+  <!-- BPMN Diagram Interchange (視覚的レイアウト) -->
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="AIAutomationWorkflow">
+      
+      <!-- Start Event -->
+      <bpmndi:BPMNShape id="StartEvent_GoogleForm_di" bpmnElement="StartEvent_GoogleForm">
+        <dc:Bounds x="150" y="200" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="130" y="243" width="76" height="27"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      
+      <!-- n8n Workflow #1 -->
+      <bpmndi:BPMNShape id="Task_N8N_CreateIssue_di" bpmnElement="Task_N8N_CreateIssue">
+        <dc:Bounds x="250" y="178" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      
+      <!-- n8n Workflow #2 -->
+      <bpmndi:BPMNShape id="Task_N8N_ClassifyIssue_di" bpmnElement="Task_N8N_ClassifyIssue">
+        <dc:Bounds x="400" y="178" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      
+      <!-- GitHub Actions - Issue通知 -->
+      <bpmndi:BPMNShape id="Task_GHA_NotifyIssue_di" bpmnElement="Task_GHA_NotifyIssue">
+        <dc:Bounds x="550" y="178" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      
+      <!-- VS Code Implementation -->
+      <bpmndi:BPMNShape id="Task_VSCode_Implementation_di" bpmnElement="Task_VSCode_Implementation">
+        <dc:Bounds x="700" y="178" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      
+      <!-- n8n Workflow #3 -->
+      <bpmndi:BPMNShape id="Task_N8N_CreatePR_di" bpmnElement="Task_N8N_CreatePR">
+        <dc:Bounds x="850" y="178" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      
+      <!-- GitHub Actions - PR通知 -->
+      <bpmndi:BPMNShape id="Task_GHA_NotifyPR_di" bpmnElement="Task_GHA_NotifyPR">
+        <dc:Bounds x="1000" y="178" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      
+      <!-- Review -->
+      <bpmndi:BPMNShape id="Task_Review_di" bpmnElement="Task_Review">
+        <dc:Bounds x="1150" y="178" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      
+      <!-- Gateway -->
+      <bpmndi:BPMNShape id="Gateway_ReviewDecision_di" bpmnElement="Gateway_ReviewDecision" isMarkerVisible="true">
+        <dc:Bounds x="1300" y="193" width="50" height="50"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1305" y="250" width="40" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      
+      <!-- n8n Workflow #4 -->
+      <bpmndi:BPMNShape id="Task_N8N_Deploy_di" bpmnElement="Task_N8N_Deploy">
+        <dc:Bounds x="1400" y="178" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      
+      <!-- Final Notification -->
+      <bpmndi:BPMNShape id="Task_FinalNotification_di" bpmnElement="Task_FinalNotification">
+        <dc:Bounds x="1550" y="178" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      
+      <!-- End Event -->
+      <bpmndi:BPMNShape id="EndEvent_Complete_di" bpmnElement="EndEvent_Complete">
+        <dc:Bounds x="1700" y="200" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1705" y="243" width="26" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      
+      <!-- Edges (Sequence Flows) -->
+      <bpmndi:BPMNEdge id="Flow_FormToN8N1_di" bpmnElement="Flow_FormToN8N1">
+        <di:waypoint x="186" y="218"/>
+        <di:waypoint x="250" y="218"/>
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_N8N1ToClassify_di" bpmnElement="Flow_N8N1ToClassify">
+        <di:waypoint x="350" y="218"/>
+        <di:waypoint x="400" y="218"/>
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_ClassifyToGHActions_di" bpmnElement="Flow_ClassifyToGHActions">
+        <di:waypoint x="500" y="218"/>
+        <di:waypoint x="550" y="218"/>
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_NotifyToVSCode_di" bpmnElement="Flow_NotifyToVSCode">
+        <di:waypoint x="650" y="218"/>
+        <di:waypoint x="700" y="218"/>
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_ImplToN8N3_di" bpmnElement="Flow_ImplToN8N3">
+        <di:waypoint x="800" y="218"/>
+        <di:waypoint x="850" y="218"/>
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_N8N3ToGHActions_di" bpmnElement="Flow_N8N3ToGHActions">
+        <di:waypoint x="950" y="218"/>
+        <di:waypoint x="1000" y="218"/>
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_PRToReview_di" bpmnElement="Flow_PRToReview">
+        <di:waypoint x="1100" y="218"/>
+        <di:waypoint x="1150" y="218"/>
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_ReviewToGateway_di" bpmnElement="Flow_ReviewToGateway">
+        <di:waypoint x="1250" y="218"/>
+        <di:waypoint x="1300" y="218"/>
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_Approved_di" bpmnElement="Flow_Approved">
+        <di:waypoint x="1350" y="218"/>
+        <di:waypoint x="1400" y="218"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1365" y="200" width="20" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_ChangesRequested_di" bpmnElement="Flow_ChangesRequested">
+        <di:waypoint x="1325" y="193"/>
+        <di:waypoint x="1325" y="100"/>
+        <di:waypoint x="750" y="100"/>
+        <di:waypoint x="750" y="178"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1010" y="82" width="55" height="27"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_DeployToNotify_di" bpmnElement="Flow_DeployToNotify">
+        <di:waypoint x="1500" y="218"/>
+        <di:waypoint x="1550" y="218"/>
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_NotifyToEnd_di" bpmnElement="Flow_NotifyToEnd">
+        <di:waypoint x="1650" y="218"/>
+        <di:waypoint x="1700" y="218"/>
+      </bpmndi:BPMNEdge>
+      
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+  
+</bpmn:definitions>
