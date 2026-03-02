@@ -18,10 +18,22 @@
       <bpmn:incoming>Flow_FormToN8N1</bpmn:incoming>
       <bpmn:outgoing>Flow_N8N1ToClassify</bpmn:outgoing>
       <bpmn:documentation>
-        n8n API: POST /workflows/execute
-        Workflow: google-form-to-github-issue
-        Input: Form data (title, description, priority)
+        Webhook URL: https://kenken999-n8n-free.hf.space/webhook/google-form-to-issue
+        Method: POST
+        Workflow ID: Smhynt7Gvp2Cfpu2
+        Status: Active ✅
+        
+        Input: Form data (title, description, priority, category, requester)
         Output: GitHub Issue URL, Issue Number
+        
+        Example Request:
+        {
+          "title": "新機能要望",
+          "description": "詳細説明",
+          "priority": "high",
+          "category": "feature",
+          "requester": "宮田健一"
+        }
       </bpmn:documentation>
     </bpmn:serviceTask>
     
@@ -30,10 +42,19 @@
       <bpmn:incoming>Flow_N8N1ToClassify</bpmn:incoming>
       <bpmn:outgoing>Flow_ClassifyToGHActions</bpmn:outgoing>
       <bpmn:documentation>
-        n8n API: POST /workflows/execute
-        Workflow: auto-classify-issue
-        Input: Issue Number, Title, Body
-        Output: Labels, Milestone, Assignee
+        Webhook URL: https://kenken999-n8n-free.hf.space/webhook/github-issue-classify
+        Method: POST
+        Workflow ID: IRousr79doQJhyC5
+        Status: Active ✅
+        Trigger: GitHub Issues (opened)
+        
+        Input: GitHub Webhook payload (issue, action, repository)
+        Output: Labels (priority, bug, feature), Assignee
+        
+        Classification Rules:
+        - "緊急" or "asap" → priority: high, assignee: kenichimiyata
+        - "バグ" or "bug" → label: bug, assignee: poe-dari-san
+        - "機能" or "feature" → label: feature, assignee: kenichimiyata
       </bpmn:documentation>
     </bpmn:serviceTask>
     
@@ -64,10 +85,23 @@
       <bpmn:incoming>Flow_ImplToN8N3</bpmn:incoming>
       <bpmn:outgoing>Flow_N8N3ToGHActions</bpmn:outgoing>
       <bpmn:documentation>
-        n8n API: POST /workflows/execute
-        Workflow: auto-create-pr
-        Input: Branch name, Commits
+        Webhook URL: https://kenken999-n8n-free.hf.space/webhook/github-branch-push
+        Method: POST
+        Workflow ID: Luv7ZgygpznLnOrE
+        Status: Active ✅
+        Trigger: GitHub Push event
+        
+        Input: GitHub Webhook payload (ref, commits, repository)
         Output: PR URL, PR Number
+        
+        Branch Detection:
+        - feature/* → Create PR with feature template
+        - bugfix/* → Create PR with bugfix template
+        - docs/* → Create PR with documentation template
+        
+        Reviewer Assignment:
+        - feature branches → kenichimiyata
+        - bugfix branches → poe-dari-san
       </bpmn:documentation>
     </bpmn:serviceTask>
     
@@ -114,10 +148,25 @@
       <bpmn:incoming>Flow_Approved</bpmn:incoming>
       <bpmn:outgoing>Flow_DeployToNotify</bpmn:outgoing>
       <bpmn:documentation>
-        n8n API: POST /workflows/execute
-        Workflow: auto-merge-and-deploy
-        Input: PR Number
-        Output: Deployment status, Production URL
+        Webhook URL: https://kenken999-n8n-free.hf.space/webhook/github-pr-approved
+        Method: POST
+        Workflow ID: Bbpmel4jLa8oeDCo
+        Status: Active ✅
+        Trigger: GitHub Pull Request Review (approved)
+        
+        Input: GitHub Webhook payload (pull_request, review, repository)
+        Output: Deployment status, Production URL, Health check result
+        
+        Deployment Steps:
+        1. Merge PR to main branch
+        2. Deploy to target environment (shop11, PhPRunner_11, localProject)
+        3. Wait 30 seconds
+        4. Health check (HTTP GET)
+        5. Send notification (success/failure)
+        
+        Rollback:
+        - Triggered on health check failure
+        - Revert to previous commit
       </bpmn:documentation>
     </bpmn:serviceTask>
     
